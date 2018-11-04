@@ -39,7 +39,8 @@ int reverse(int num) {
 
 enum State {
     WAITING_ACK,
-    WAITING_MSG
+    WAITING_MSG,
+    SENDING_WAITING_QUEUE
 };
 
 struct SenderInfo {
@@ -95,7 +96,8 @@ void A_input(struct pkt packet) {
             string next_msg = waiting_queue.front();
             waiting_queue.pop();
             struct msg next_message;
-            memcpy(next_message.data, (char *) next_msg.data(), sizeof(next_msg.data()));
+            memcpy(next_message.data, (char *) next_msg.data(), 20);
+            A.sender_state = SENDING_WAITING_QUEUE;
             A_output(next_message);
             return;
         }
