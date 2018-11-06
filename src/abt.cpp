@@ -21,6 +21,7 @@ using namespace std;
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 #define TIME_OUT 20.0f
 
+// store messages which are not sent yet
 queue<string> waiting_queue;
 
 int get_checksum(struct pkt *packet) {
@@ -33,26 +34,27 @@ int get_checksum(struct pkt *packet) {
     return ~cs;
 }
 
+//seq and ack can be only 0 or 1
 int reverse(int num) {
     return 1 - num;
 }
 
 enum State {
-    WAITING_ACK,
-    WAITING_MSG,
-    SENDING_WAITING_QUEUE
+    WAITING_ACK, //waiting for response ack, new message need to push into waiting queue
+    WAITING_MSG, //waiting for new message
+    SENDING_WAITING_QUEUE //sending remaining messages in waiting queue
 };
 
 struct SenderInfo {
-    int next_seq;
-    int next_ack;
+    int next_seq; //next seq pkt need to be sent
+    int next_ack; //next expected ack
     enum State sender_state;
     struct pkt next_packet;
 
 } A;
 
 struct ReceiverInfo {
-    int next_seq;
+    int next_seq; //next expected seq
     struct pkt ack_pkt;
 } B;
 
@@ -90,6 +92,7 @@ void A_input(struct pkt packet) {
     }
 
     if (packet.acknum == A.next_ack) {
+        //send next pkt
         stoptimer(0);
         A.next_seq = reverse(A.next_seq);
         if (!waiting_queue.empty()) {

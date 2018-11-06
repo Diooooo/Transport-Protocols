@@ -26,8 +26,8 @@ using namespace std;
 queue<string> waiting_queue;
 vector<string> window_buffer;
 
-int head;
-int tail;
+int head; //seq of first pkt in window
+int tail; //seq of last pkt in window
 
 int get_checksum(struct pkt *packet) {
     int cs = 0;
@@ -40,13 +40,14 @@ int get_checksum(struct pkt *packet) {
 }
 
 int next_num(int num, int window_size) {
+    // compute next seq or ack
     return (num + 1) % window_size;
 }
 
 enum State {
-    WAITING_ACK,
-    WAITING_MSG,
-    SENDING_BUFFER
+    WAITING_ACK, //window is full
+    WAITING_MSG, //window is not full
+    SENDING_BUFFER //sending pkt in window
 };
 
 struct SenderInfo {
@@ -68,9 +69,9 @@ void A_output(struct msg message) {
         waiting_queue.push(string(message.data));
         return;
     }
-    if (A.sender_state == WAITING_MSG) {
-        if (window_buffer.empty()) {
-            starttimer(0, TIME_OUT);
+    if (A.sender_state == WAITING_MSG) { //window is not full, message from upper layer can be directly sent
+        if (window_buffer.empty()){
+            starttimer(0, TIME_OUT); //start timer for the first pkt in window
             tail = head;
         } else {
             if (window_buffer.size() == A.WINDOW_SIZE - 1) {
@@ -82,7 +83,7 @@ void A_output(struct msg message) {
         }
         window_buffer.push_back(string(message.data));
     }
-    //send pkt once a time, let A_input control the rest
+    //send pkt once a time, let A_input control the rest steps
     A.next_packet.seqnum = A.next_seq;
     A.next_packet.acknum = A.next_ack;
     memcpy(A.next_packet.payload, message.data, sizeof(message.data));
@@ -97,12 +98,12 @@ void A_output(struct msg message) {
 
 /* called from layer 3, when a packet arrives for layer 4 */
 void A_input(struct pkt packet) {
-    //case 1: receive ack of first pkt in window--shuffle window, send next pkt in window, and restart timer
-
-    //case 2: unexpected ack--ignore
+    //do nothing for broken pkt
     if (packet.checksum != get_checksum(&packet)) {
         return;
     }
+    //case 1: receive ack of first pkt in window--shuffle window, send next pkt in window, and restart timer
+    //case 2: unexpected ack--ignore
     if (packet.acknum == head) {
         cout << "received expect pkt" << endl;
         stoptimer(0);
