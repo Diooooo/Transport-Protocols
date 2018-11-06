@@ -19,9 +19,11 @@ using namespace std;
 **********************************************************************/
 
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
+
 #define TIME_OUT 20.0f
 
 // store messages which are not sent yet
+
 queue<string> waiting_queue;
 
 int get_checksum(struct pkt *packet) {
@@ -34,7 +36,9 @@ int get_checksum(struct pkt *packet) {
     return ~cs;
 }
 
+
 //seq and ack can be only 0 or 1
+
 int reverse(int num) {
     return 1 - num;
 }
@@ -92,7 +96,9 @@ void A_input(struct pkt packet) {
     }
 
     if (packet.acknum == A.next_ack) {
+
         //send next pkt
+
         stoptimer(0);
         A.next_seq = reverse(A.next_seq);
         if (!waiting_queue.empty()) {
