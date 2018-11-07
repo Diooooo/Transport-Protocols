@@ -23,8 +23,8 @@ using namespace std;
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 #define TIME_OUT 20.0f
 
-queue<string> waiting_queue;
-vector<string> window_buffer;
+queue<struct msg> waiting_queue;
+vector<struct msg> window_buffer;
 
 int head; //seq of first pkt in window
 int tail; //seq of last pkt in window
@@ -66,11 +66,11 @@ struct ReceiverInfo {
 /* called from layer 5, passed the data to be sent to other side */
 void A_output(struct msg message) {
     if (A.sender_state == WAITING_ACK) {
-        waiting_queue.push(string(message.data));
+        waiting_queue.push(message);
         return;
     }
     if (A.sender_state == WAITING_MSG) { //window is not full, message from upper layer can be directly sent
-        if (window_buffer.empty()){
+        if (window_buffer.empty()) {
             starttimer(0, TIME_OUT); //start timer for the first pkt in window
             tail = head;
         } else {
@@ -81,7 +81,7 @@ void A_output(struct msg message) {
             }
             tail = next_num(tail, A.WINDOW_SIZE);
         }
-        window_buffer.push_back(string(message.data));
+        window_buffer.push_back(message);
     }
     //send pkt once a time, let A_input control the rest steps
     A.next_packet.seqnum = A.next_seq;
@@ -113,13 +113,13 @@ void A_input(struct pkt packet) {
         if (!waiting_queue.empty()) {
             cout << "waiting queue not empty, shuffle window" << endl;
             tail = next_num(tail, A.WINDOW_SIZE);
-            string next_msg = waiting_queue.front();
+            struct msg next_msg = waiting_queue.front();
             window_buffer.push_back(next_msg);
             waiting_queue.pop();
-            struct msg next_pkt;
-            memcpy(next_pkt.data, (char *) next_msg.data(), 20);
+//            struct msg next_pkt;
+//            memcpy(next_pkt.data, (char *) next_msg.data(), 20);
             A.sender_state = SENDING_BUFFER;
-            A_output(next_pkt);
+            A_output(next_msg);
             A.sender_state = WAITING_ACK;
         } else {
             cout << "waiting queue is empty, means window buffer is not full" << endl;
@@ -144,7 +144,7 @@ void A_timerinterrupt() {
         A.next_seq = (head + i) % A.WINDOW_SIZE;
         A.next_ack = A.next_seq;
         struct msg resend_msg;
-        memcpy(resend_msg.data, (char *) window_buffer[i].data(), 20);
+        memcpy(resend_msg.data, window_buffer[i].data, 20);
         A.sender_state = SENDING_BUFFER;
         A_output(resend_msg);
         A.sender_state = WAITING_ACK;

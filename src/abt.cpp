@@ -3,6 +3,7 @@
 #include <string.h>
 #include <iostream>
 #include <queue>
+#include <string>
 
 using namespace std;
 /* ******************************************************************
@@ -24,7 +25,7 @@ using namespace std;
 
 // store messages which are not sent yet
 
-queue<string> waiting_queue;
+queue<struct msg> waiting_queue;
 
 int get_checksum(struct pkt *packet) {
     int cs = 0;
@@ -65,7 +66,7 @@ struct ReceiverInfo {
 /* called from layer 5, passed the data to be sent to other side */
 void A_output(struct msg message) {
     if (A.sender_state == WAITING_ACK) {
-        waiting_queue.push(string(message.data));
+        waiting_queue.push(message);
         return;
     }
     //add pkt info: get seqnum, acknum, compute checksum, copy msg to payload
@@ -102,10 +103,10 @@ void A_input(struct pkt packet) {
         stoptimer(0);
         A.next_seq = reverse(A.next_seq);
         if (!waiting_queue.empty()) {
-            string next_msg = waiting_queue.front();
+            struct msg next_message = waiting_queue.front();
             waiting_queue.pop();
-            struct msg next_message;
-            memcpy(next_message.data, (char *) next_msg.data(), 20);
+//            struct msg next_message;
+//            memcpy(next_message.data, next_msg, sizeof(next_msg));
             A.sender_state = SENDING_WAITING_QUEUE;
             A_output(next_message);
             return;
