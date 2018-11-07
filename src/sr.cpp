@@ -54,7 +54,7 @@ int get_checksum(struct pkt *packet) {
 
 void A_output(struct msg message)
 {
-  A.next_packet.seqnum = sequence;
+  A.next_packet.seqnum = A.next_seq;
   A.next_packet.acknum = 0;
   bzero(&A.next_packet.payload,sizeof(A.next_packet.payload));
   strncpy(A.next_packet.payload,message.data,sizeof(A.next_packet.payload));
@@ -65,34 +65,11 @@ void A_output(struct msg message)
     starttimer(0,TIME_OUT);
   }
   if(A.next_seq - A.base < N){
-    if(wait_queue.empty()){
       tolayer3(0,A.next_packet);
       struct pkt_time pkt_t;
       pkt_t.packet = A.next_packet;
       pkt_t.start_time = start_time;
       A_windows.push_back(pkt_t);
-    }
-    else{
-      while(!wait_queue.empty() && wait_queue.front().seqnum - A.base < N){
-        struct pkt p = wait_queue.front();
-        wait_queue.pop();
-        struct pkt_time pkt_t;
-        pkt_t.packet = A.next_packet;
-        pkt_t.start_time = start_time;
-        A_windows.push_back(pkt_t);
-        tolayer3(0,p);
-      }
-      if(A.next_seq - A.base < N){
-        struct pkt_time pkt_t;
-        pkt_t.packet = A.next_packet;
-        pkt_t.start_time = start_time;
-        A_windows.push_back(pkt_t);
-        tolayer3(0,A.next_packet);
-      }
-      else{
-        wait_queue.push(A.next_packet);
-      }
-    }
   }
   else{
     wait_queue.push(A.next_packet);
