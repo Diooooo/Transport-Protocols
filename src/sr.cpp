@@ -23,7 +23,7 @@ using namespace std;
 
 /* called from layer 5, passed the data to be sent to other side */
 
-#define TIME_OUT 20.0f
+#define TIME_OUT 30.0f
 
 struct pkt_time {
     struct pkt packet;

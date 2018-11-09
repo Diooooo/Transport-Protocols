@@ -21,7 +21,7 @@ using namespace std;
 
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 
-#define TIME_OUT 20.0f
+#define TIME_OUT 30.0f
 
 // store messages which are not sent yet
 

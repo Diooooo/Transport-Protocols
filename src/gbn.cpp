@@ -21,7 +21,7 @@ using namespace std;
 **********************************************************************/
 
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
-#define TIME_OUT 20.0f
+#define TIME_OUT 30.0f
 
 queue<struct msg> waiting_queue;
 vector<struct msg> window_buffer;
@@ -41,7 +41,8 @@ int get_checksum(struct pkt *packet) {
 
 int next_num(int num, int window_size) {
     // compute next seq or ack
-    return (num + 1) % window_size;
+//    return (num + 1) % window_size;
+    return num + 1;
 }
 
 enum State {
@@ -63,9 +64,23 @@ struct ReceiverInfo {
     struct pkt ack_pkt;
 } B;
 
+void SendMsg(struct msg message) {
+    //send pkt once a time, let A_input control the rest steps
+    A.next_packet.seqnum = A.next_seq;
+    A.next_packet.acknum = A.next_ack;
+    memcpy(A.next_packet.payload, message.data, sizeof(message.data));
+    int ckecksum = get_checksum(&A.next_packet);
+    A.next_packet.checksum = ckecksum;
+    //then send pkt to layer 3 using tolayer3()
+    cout << "Send: " << message.data << ", seq=" << A.next_seq << " ack=" << A.next_ack << endl;
+    tolayer3(0, A.next_packet);
+    A.next_seq = next_num(A.next_seq, A.WINDOW_SIZE);
+    A.next_ack = A.next_seq;
+}
+
 /* called from layer 5, passed the data to be sent to other side */
 void A_output(struct msg message) {
-    if (A.sender_state == WAITING_ACK) {
+    if (A.sender_state == WAITING_ACK || A.sender_state == SENDING_BUFFER) {
         waiting_queue.push(message);
         return;
     }
@@ -82,18 +97,19 @@ void A_output(struct msg message) {
             tail = next_num(tail, A.WINDOW_SIZE);
         }
         window_buffer.push_back(message);
+        SendMsg(message);
     }
-    //send pkt once a time, let A_input control the rest steps
-    A.next_packet.seqnum = A.next_seq;
-    A.next_packet.acknum = A.next_ack;
-    memcpy(A.next_packet.payload, message.data, sizeof(message.data));
-    int ckecksum = get_checksum(&A.next_packet);
-    A.next_packet.checksum = ckecksum;
-    //then send pkt to layer 3 using tolayer3()
-    cout << "Send: " << message.data << ", seq=" << A.next_seq << " ack=" << A.next_ack << endl;
-    tolayer3(0, A.next_packet);
-    A.next_seq = next_num(A.next_seq, A.WINDOW_SIZE);
-    A.next_ack = A.next_seq;
+//    //send pkt once a time, let A_input control the rest steps
+//    A.next_packet.seqnum = A.next_seq;
+//    A.next_packet.acknum = A.next_ack;
+//    memcpy(A.next_packet.payload, message.data, sizeof(message.data));
+//    int ckecksum = get_checksum(&A.next_packet);
+//    A.next_packet.checksum = ckecksum;
+//    //then send pkt to layer 3 using tolayer3()
+//    cout << "Send: " << message.data << ", seq=" << A.next_seq << " ack=" << A.next_ack << endl;
+//    tolayer3(0, A.next_packet);
+//    A.next_seq = next_num(A.next_seq, A.WINDOW_SIZE);
+//    A.next_ack = A.next_seq;
 }
 
 /* called from layer 3, when a packet arrives for layer 4 */
@@ -105,24 +121,36 @@ void A_input(struct pkt packet) {
     //case 1: receive ack of first pkt in window--shuffle window, send next pkt in window, and restart timer
     //case 2: unexpected ack--ignore
     if (packet.acknum == head) {
-        cout << "received expect pkt" << endl;
+        cout << "received expect pkt=" << packet.acknum << endl;
         stoptimer(0);
         //shuffle window
         head = next_num(head, A.WINDOW_SIZE);
         window_buffer.erase(window_buffer.begin());
         if (!waiting_queue.empty()) {
+            //now in this case the window may not have N-1 pkts
             cout << "waiting queue not empty, shuffle window" << endl;
-            tail = next_num(tail, A.WINDOW_SIZE);
-            struct msg next_msg = waiting_queue.front();
-            window_buffer.push_back(next_msg);
-            waiting_queue.pop();
-//            struct msg next_pkt;
-//            memcpy(next_pkt.data, (char *) next_msg.data(), 20);
             A.sender_state = SENDING_BUFFER;
-            A_output(next_msg);
-            A.sender_state = WAITING_ACK;
+            while (!waiting_queue.empty() && window_buffer.size() < A.WINDOW_SIZE) {
+                tail = next_num(tail, A.WINDOW_SIZE);
+                struct msg next_msg = waiting_queue.front();
+                window_buffer.push_back(next_msg);
+                waiting_queue.pop();
+                SendMsg(next_msg);
+            }
+            A.sender_state = window_buffer.size() < A.WINDOW_SIZE ? WAITING_MSG : WAITING_ACK;
+//            tail = next_num(tail, A.WINDOW_SIZE);
+//            struct msg next_msg = waiting_queue.front();
+//            window_buffer.push_back(next_msg);
+//            waiting_queue.pop();
+////            struct msg next_pkt;
+////            memcpy(next_pkt.data, (char *) next_msg.data(), 20);
+//            A.sender_state = SENDING_BUFFER;
+////            A_output(next_msg);
+//            SendMsg(next_msg);
+//            A.sender_state = WAITING_ACK;
         } else {
-            cout << "waiting queue is empty, means window buffer is not full" << endl;
+            cout << "waiting queue is empty, means window buffer is not full" << ", window now contains "
+                 << window_buffer.size() << " pkts" << endl;
             A.sender_state = WAITING_MSG;
             if (window_buffer.empty()) {
                 return;
@@ -140,15 +168,20 @@ void A_timerinterrupt() {
     //retransmit all N pkt(if queue.size<N, retransmit all pkt in queue)
     cout << "Resend all pkt in window" << endl;
     starttimer(0, TIME_OUT);
+    enum State pre_state = A.sender_state;
+    A.sender_state = SENDING_BUFFER;
     for (int i = 0; i < window_buffer.size(); i++) {
-        A.next_seq = (head + i) % A.WINDOW_SIZE;
+//        A.next_seq = (head + i) % A.WINDOW_SIZE;
+        A.next_seq = head + i;
         A.next_ack = A.next_seq;
         struct msg resend_msg;
         memcpy(resend_msg.data, window_buffer[i].data, 20);
-        A.sender_state = SENDING_BUFFER;
-        A_output(resend_msg);
-        A.sender_state = WAITING_ACK;
+//        A.sender_state = SENDING_BUFFER;
+//        A_output(resend_msg);
+//        A.sender_state = WAITING_ACK;
+        SendMsg(resend_msg);
     }
+    A.sender_state = pre_state;
 }
 
 /* the following routine will be called once (only) before any other */
