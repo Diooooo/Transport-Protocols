@@ -120,12 +120,14 @@ void A_input(struct pkt packet) {
     }
     //case 1: receive ack of first pkt in window--shuffle window, send next pkt in window, and restart timer
     //case 2: unexpected ack--ignore
-    if (packet.acknum == head) {
+    if (packet.acknum >= head) {
         cout << "received expect pkt=" << packet.acknum << endl;
         stoptimer(0);
         //shuffle window
-        head = next_num(head, A.WINDOW_SIZE);
-        window_buffer.erase(window_buffer.begin());
+        for (int i = 0; i < packet.acknum-head+1;i++){
+            window_buffer.erase(window_buffer.begin());
+        }
+        head = next_num(packet.acknum, A.WINDOW_SIZE);
         if (!waiting_queue.empty()) {
             //now in this case the window may not have N-1 pkts
             cout << "waiting queue not empty, shuffle window" << endl;
@@ -212,7 +214,8 @@ void B_input(struct pkt packet) {
             cout << "Response to sender: " << "ack=" << B.ack_pkt.acknum << " next expected seq=" << B.next_seq << endl;
         } else {
             //case 2: received unexpected pkt--send last ack
-            B.ack_pkt.acknum = packet.seqnum;
+            int last_received = B.next_seq - 1;
+            B.ack_pkt.acknum = last_received;
             B.ack_pkt.checksum = get_checksum(&B.ack_pkt);
             cout << "Response to sender: " << "ack=" << B.ack_pkt.acknum << " next expected seq=" << B.next_seq << endl;
             tolayer3(1, B.ack_pkt);
